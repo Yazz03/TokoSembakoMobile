@@ -1,39 +1,52 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   View, Text, StyleSheet, SafeAreaView, TouchableOpacity, 
-  ScrollView, Image, Linking, ActivityIndicator 
+  ScrollView, Image, Linking, Alert 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
+import { supabase } from '../../Services/supabase'; // 👈 Tambahkan import Supabase
 
 export default function TrackingScreen({ navigation, route }) {
-  // Data yang dibawa dari Checkout
-  const { cart, products, selectedAddress, lat, lon, totalPayment, subtotal, ongkir, adminFee } = route.params || {};
+  const { selectedAddress, lat, lon, totalPayment, subtotal, ongkir, adminFee } = route.params || {};
 
-  // Status Pengiriman: 0 = Pesan Diterima, 1 = Dalam Perjalanan, 2 = Sampai Tujuan
-  // Nanti nilai ini akan diambil dari Supabase (Admin Side)
-  const [deliveryStatus, setDeliveryStatus] = useState(1); 
+  // ⚠️ DIUBAH SEMENTARA JADI 2 AGAR TOMBOL "SAMPAI" BISA DIKLIK SAAT TESTING
+  const [deliveryStatus, setDeliveryStatus] = useState(2); 
 
-  // Koordinat Peta
   const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${lon - 0.005},${lat - 0.005},${lon + 0.005},${lat + 0.005}&layer=mapnik&marker=${lat},${lon}`;
 
-  const handleFinish = () => {
-    alert("Terima kasih sudah berbelanja di Warung Budhe Bintang!");
-    navigation.navigate('Home'); // Kembali ke Beranda
+  // 👇 INI YANG DI-UPGRADE: Fungsi mencatat riwayat ke database 👇
+  const handleFinish = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { error } = await supabase
+          .from('order_history')
+          .insert([
+            {
+              user_id: user.id,
+              total_amount: totalPayment,
+              status: 'Selesai' // Status untuk pesanan yang sudah diantar
+            }
+          ]);
+        if (error) throw error;
+      }
+    } catch (error) {
+      console.error("Gagal simpan riwayat:", error.message);
+    }
+
+    Alert.alert("Pesanan Selesai", "Terima kasih sudah berbelanja di Warung Budhe Bintang!");
+    navigation.navigate('Home'); 
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* 1. Header & Maps */}
       <View style={styles.mapSection}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         
-        <WebView 
-          source={{ uri: mapUrl }} 
-          style={styles.map}
-        />
+        <WebView source={{ uri: mapUrl }} style={styles.map} />
         
         <TouchableOpacity style={styles.expandButton}>
           <Text style={styles.expandText}>Lihat lebih lengkap</Text>
@@ -41,12 +54,10 @@ export default function TrackingScreen({ navigation, route }) {
       </View>
 
       <ScrollView style={styles.content}>
-        
-        {/* 2. Status Pengiriman (Stepper) */}
         <View style={styles.statusContainer}>
           <View style={styles.stepper}>
             <View style={[styles.stepLine, deliveryStatus >= 1 && styles.lineActive]} />
-            <View style={[styles.stepLine, deliveryStatus >= 2 && styles.lineActive]} />
+            <View style={[styles.stepLine, {left: '50%'}, deliveryStatus >= 2 && styles.lineActive]} />
             
             <View style={styles.dotsRow}>
               <View style={[styles.dot, deliveryStatus >= 0 && styles.dotActive]} />
@@ -63,7 +74,6 @@ export default function TrackingScreen({ navigation, route }) {
           <Text style={styles.timeLabel}>14:12</Text>
         </View>
 
-        {/* 3. Driver Info & Action Buttons */}
         <View style={styles.driverCard}>
           <View style={styles.driverInfo}>
             <Image 
@@ -85,7 +95,6 @@ export default function TrackingScreen({ navigation, route }) {
           </View>
         </View>
 
-        {/* 4. Alamat Tujuan */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="location-sharp" size={20} color="#E74C3C" />
@@ -94,7 +103,6 @@ export default function TrackingScreen({ navigation, route }) {
           <Text style={styles.addressText}>{selectedAddress}</Text>
         </View>
 
-        {/* 5. Ringkasan Pesanan (Cart Data) */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Ringkasan Pesanan</Text>
           <View style={styles.divider} />
@@ -120,7 +128,6 @@ export default function TrackingScreen({ navigation, route }) {
           <Text style={styles.paymentMethod}>Sudah dibayar via Midtrans</Text>
         </View>
 
-        {/* 6. Tombol Selesai (Hanya aktif jika status = 2) */}
         <TouchableOpacity 
           style={[styles.finishBtn, deliveryStatus < 2 && styles.finishBtnDisabled]} 
           onPress={handleFinish}
@@ -141,9 +148,7 @@ const styles = StyleSheet.create({
   backButton: { position: 'absolute', top: 40, left: 20, zIndex: 10, backgroundColor: '#fff', padding: 8, borderRadius: 20, elevation: 5 },
   expandButton: { position: 'absolute', bottom: 10, right: 20, backgroundColor: '#fff', paddingHorizontal: 15, paddingVertical: 5, borderRadius: 15, elevation: 3 },
   expandText: { fontSize: 12, color: '#666' },
-
   content: { flex: 1, padding: 20 },
-
   statusContainer: { alignItems: 'center', marginBottom: 25 },
   stepper: { width: '80%', height: 30, justifyContent: 'center', position: 'relative' },
   dotsRow: { flexDirection: 'row', justifyContent: 'space-between', zIndex: 2 },
@@ -155,7 +160,6 @@ const styles = StyleSheet.create({
   statusLabel: { fontSize: 10, color: '#999', textAlign: 'center', width: '33%' },
   labelActive: { color: '#333', fontWeight: 'bold' },
   timeLabel: { fontSize: 10, color: '#999', marginTop: 5 },
-
   driverCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8F9FA', padding: 15, borderRadius: 15, marginBottom: 20 },
   driverInfo: { flexDirection: 'row', alignItems: 'center' },
   driverPhoto: { width: 45, height: 45, borderRadius: 25, marginRight: 12 },
@@ -163,12 +167,10 @@ const styles = StyleSheet.create({
   driverSub: { fontSize: 11, color: '#666' },
   actionButtons: { flexDirection: 'row' },
   iconBtn: { padding: 8, backgroundColor: '#fff', borderRadius: 20, marginLeft: 10, elevation: 2 },
-
   section: { marginBottom: 25 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   sectionTitle: { fontSize: 15, fontWeight: 'bold', marginLeft: 5 },
   addressText: { fontSize: 13, color: '#666', lineHeight: 20 },
-
   divider: { height: 1, backgroundColor: '#EEE', marginVertical: 12 },
   priceRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   priceLabel: { fontSize: 13, color: '#999' },
@@ -176,7 +178,6 @@ const styles = StyleSheet.create({
   totalLabel: { fontSize: 16, fontWeight: 'bold' },
   totalValue: { fontSize: 18, fontWeight: 'bold', color: '#002244' },
   paymentMethod: { fontSize: 11, color: '#27AE60', textAlign: 'right', marginTop: 5, fontStyle: 'italic' },
-
   finishBtn: { backgroundColor: '#3498DB', padding: 16, borderRadius: 15, alignItems: 'center', marginBottom: 40 },
   finishBtnDisabled: { backgroundColor: '#BDC3C7' },
   finishBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 }

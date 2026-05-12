@@ -237,7 +237,7 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.activeIndicator} />
         </TouchableOpacity>
         
-        {/* 👇 INI YANG DIUPDATE: Navigasi ke Halaman Cart 👇 */}
+        {/* Navigasi ke Halaman Cart */}
         <TouchableOpacity 
           style={styles.tabItem} 
           onPress={() => navigation.navigate('Cart')}
@@ -250,7 +250,11 @@ export default function HomeScreen({ navigation }) {
           <Ionicons name="apps" size={28} color="#fff" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.tabItem}>
+        {/* 👇 INI YANG SAYA PERBARUI: Navigasi ke Halaman Riwayat 👇 */}
+        <TouchableOpacity 
+          style={styles.tabItem}
+          onPress={() => navigation.navigate('HistoryScreen')}
+        >
           <Ionicons name="time-outline" size={24} color="#888" />
         </TouchableOpacity>
 

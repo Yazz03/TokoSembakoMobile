@@ -4,7 +4,7 @@ import {
   FlatList, Image, SafeAreaView, StyleSheet, Text, TextInput, 
   TouchableOpacity, View, Alert, Modal, ScrollView 
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native'; // 👈 Tambahan import
+import { useFocusEffect } from '@react-navigation/native'; // Sensor untuk refresh otomatis
 import { supabase } from '../../Services/supabase';
 
 export default function OrderScreen({ navigation, route }) {
@@ -15,7 +15,7 @@ export default function OrderScreen({ navigation, route }) {
   const [cart, setCart] = useState({}); 
   const [isCartVisible, setIsCartVisible] = useState(false);
 
-  // 👈 SENSOR BARU: Menggantikan useEffect agar selalu refresh saat halaman dibuka
+  // 🔄 REFRESH OTOMATIS: Berjalan setiap kali halaman dibuka
   useFocusEffect(
     useCallback(() => {
       fetchProducts();
@@ -23,15 +23,18 @@ export default function OrderScreen({ navigation, route }) {
     }, [])
   );
 
+  // 1. Ambil Data Produk dari Supabase
   const fetchProducts = async () => {
     try {
       const { data, error } = await supabase.from('products').select('*');
       if (error) throw error;
       if (data) {
         setProducts(data);
-        // Tetap terapkan pencarian jika user sedang mencari barang saat data direfresh
+        // Tetap sinkronkan dengan hasil pencarian jika user sedang mengetik
         if (search) {
-          setFilteredProducts(data.filter(item => item.name.toLowerCase().includes(search.toLowerCase())));
+          setFilteredProducts(data.filter(item => 
+            item.name.toLowerCase().includes(search.toLowerCase())
+          ));
         } else {
           setFilteredProducts(data);
         }
@@ -41,6 +44,7 @@ export default function OrderScreen({ navigation, route }) {
     }
   };
 
+  // 2. Ambil Data Keranjang User dari Supabase
   const fetchInitialCart = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -51,81 +55,60 @@ export default function OrderScreen({ navigation, route }) {
         .eq('user_id', user.id);
       
       if (error) throw error;
+      
+      const cartObj = {};
       if (data) {
-        const cartObj = {};
         data.forEach(item => { 
           cartObj[item.product_id.toString()] = item.quantity; 
         });
-        setCart(cartObj);
       }
+      setCart(cartObj); // Update state keranjang lokal
     } catch (error) {
       console.error("Gagal load keranjang:", error.message);
     }
   };
 
+  // 3. Fungsi Tambah/Kurang Barang
   const updateCart = async (productId, delta) => {
     const pIdStr = productId.toString();
     const currentQty = cart[pIdStr] || 0;
     const newQty = Math.max(0, currentQty + delta);
     
-    // --- VALIDASI STOK ---
+    // Validasi Stok
     const product = products.find(p => p.id === productId);
     if (delta > 0 && product && newQty > product.stock) {
-      Alert.alert(
-        "Stok Terbatas", 
-        `Maaf, stok ${product.name} hanya tersedia ${product.stock} unit.`
-      );
+      Alert.alert("Stok Terbatas", `Stok ${product.name} hanya ada ${product.stock}.`);
       return; 
     }
 
-    // Update lokal (Optimistic UI)
+    // Update UI Cepat (Optimistic)
     setCart(prev => ({ ...prev, [pIdStr]: newQty }));
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        Alert.alert("Sesi Berakhir", "Silakan login ulang.");
-        return;
-      }
+      if (!user) return;
 
       if (newQty === 0) {
+        // Hapus dari database jika qty jadi 0
         await supabase.from('cart')
           .delete()
           .match({ user_id: user.id, product_id: productId });
       } else {
-        const { error } = await supabase
-          .from('cart')
-          .upsert(
-            { 
-              user_id: user.id, 
-              product_id: productId, 
-              quantity: newQty 
-            }, 
-            { onConflict: 'user_id,product_id' }
-          );
-        
-        if (error) {
-          await supabase.from('cart')
-            .update({ quantity: newQty })
-            .match({ user_id: user.id, product_id: productId });
-        }
+        // Update atau Tambah ke database
+        await supabase.from('cart').upsert(
+          { user_id: user.id, product_id: productId, quantity: newQty }, 
+          { onConflict: 'user_id,product_id' }
+        );
       }
     } catch (error) {
-      console.error("Gagal sync:", error.message);
-      setCart(prev => ({ ...prev, [pIdStr]: currentQty }));
+      console.error("Gagal sinkronisasi keranjang:", error.message);
+      setCart(prev => ({ ...prev, [pIdStr]: currentQty })); // Rollback jika gagal
     }
   };
 
-  // 👈 FUNGSI BARU: Untuk reset keranjang jika user checkout langsung dari halaman ini
-  const clearCart = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      await supabase.from('cart').delete().eq('user_id', user.id);
-      setCart({});
-    } catch (error) {
-      console.error("Gagal mengosongkan keranjang:", error.message);
-    }
+  // 4. Fungsi Reset Keranjang (Untuk dikirim ke Checkout)
+  const clearCartState = async () => {
+    setCart({}); // Kosongkan tampilan lokal
   };
 
   const handleSearch = (text) => {
@@ -155,7 +138,7 @@ export default function OrderScreen({ navigation, route }) {
           {item.image_url ? (
             <Image source={{ uri: item.image_url }} style={styles.productImg} />
           ) : (
-            <Ionicons name="fast-food-outline" size={30} color="#ccc" />
+            <Ionicons name="cube-outline" size={30} color="#ccc" />
           )}
         </View>
         <View style={styles.infoBox}>
@@ -209,7 +192,7 @@ export default function OrderScreen({ navigation, route }) {
         <View style={styles.searchBar}>
           <Ionicons name="search-outline" size={20} color="#7EB0C9" />
           <TextInput 
-            placeholder="Cari Barang..." 
+            placeholder="Cari barang sembako..." 
             style={styles.searchInput} 
             value={search} 
             onChangeText={handleSearch} 
@@ -238,17 +221,18 @@ export default function OrderScreen({ navigation, route }) {
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.checkoutBtn} 
-           onPress={() => navigation.navigate('Checkout', { 
-            cart: cart, 
-            products: products,
-            resetCart: clearCart // 👈 Mengirim fungsi clearCart agar dieksekusi di CheckoutScreen
-           })}
+            onPress={() => navigation.navigate('Checkout', { 
+              cart: cart, 
+              products: products,
+              resetCart: clearCartState // Kirim fungsi reset ke Checkout
+            })}
           >
             <Text style={styles.checkoutText}>Checkout</Text>
           </TouchableOpacity>
         </View>
       )}
 
+      {/* Modal Rincian Keranjang */}
       <Modal animationType="slide" transparent={true} visible={isCartVisible} onRequestClose={() => setIsCartVisible(false)}>
         <View style={styles.modalOverlay}>
           <TouchableOpacity style={styles.dimmedArea} onPress={() => setIsCartVisible(false)} />

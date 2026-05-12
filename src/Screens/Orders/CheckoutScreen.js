@@ -63,11 +63,10 @@ export default function CheckoutScreen({ navigation, route }) {
   // 5. FUNGSI UPDATE STOK KE SUPABASE
   const updateProductStock = async () => {
     try {
-      // Melakukan update stok untuk setiap produk yang dibeli
       for (const item of selectedProducts) {
         const productId = item.id;
         const quantityPurchased = cartData[productId.toString()];
-        const currentStock = item.stock || 0; // Pastikan kolom 'stock' ada di tabel Supabase
+        const currentStock = item.stock || 0; 
 
         const { error } = await supabase
           .from('products')
@@ -82,17 +81,37 @@ export default function CheckoutScreen({ navigation, route }) {
     }
   };
 
-  // 6. LOGIKA NAVIGASI SETELAH PEMBAYARAN
+  // 6. FUNGSI SAPU BERSIH KERANJANG (Mencegah Ghost Cart)
+  const clearUserCart = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { error } = await supabase.from('cart').delete().eq('user_id', user.id);
+        if (error) throw error;
+        console.log("Keranjang berhasil dikosongkan!");
+      }
+    } catch (error) {
+      console.error("Gagal hapus cart:", error.message);
+    }
+  };
+
+  // 7. LOGIKA NAVIGASI SETELAH PEMBAYARAN (Diupdate ke ProcessingScreen)
   const handleClosePayment = async () => {
     setPaymentUrl(null); // Tutup WebView
     
-    setIsProcessing(true); // Tampilkan loading sebentar saat proses update stok
-    await updateProductStock(); // Jalankan fungsi update stok
+    setIsProcessing(true); // Tampilkan loading sebentar saat proses update
+    await updateProductStock(); // Jalankan potong stok
+    await clearUserCart(); // Bersihkan keranjang di database
+    
+    if (route.params?.resetCart) {
+      route.params.resetCart(); // Reset tampilan UI
+    }
     setIsProcessing(false);
 
+    // 👇 DI SINI PERUBAHANNYA: Lempar ke Processing dulu 👇
     if (orderType === 'antar') {
-      // Jika Antar -> Masuk ke TrackingScreen
-      navigation.navigate('Tracking', {
+      navigation.navigate('Processing', {
+        targetScreen: 'Tracking', // Rute tujuan akhir
         cart: cartData,
         products: productData,
         selectedAddress: address,
@@ -104,18 +123,18 @@ export default function CheckoutScreen({ navigation, route }) {
         totalPayment: totalPayment
       });
     } else {
-      // Jika Ambil -> Masuk ke SuccessAmbilScreen (Nota Online)
-      navigation.navigate('SuccessAmbil', {
+      navigation.navigate('Processing', {
+        targetScreen: 'SuccessAmbil', // Rute tujuan akhir
         cart: cartData,
         products: productData,
         totalPayment: totalPayment,
         paymentMethod: "Pembayaran Digital",
-        userEmail: "bintang@student.ac.id" // Gantilah nanti dengan email user aktif
+        userEmail: "bintang@student.ac.id" 
       });
     }
   };
 
-  // 7. HIT BACKEND NODE.JS UNTUK TOKEN MIDTRANS
+  // 8. HIT BACKEND NODE.JS UNTUK TOKEN MIDTRANS
   const handleCreateOrder = async () => {
     if (orderType === 'antar' && address.trim() === '') {
       Alert.alert("Alamat Belum Dipilih", "Pilih alamat pengantaran di peta terlebih dahulu.");
@@ -126,7 +145,6 @@ export default function CheckoutScreen({ navigation, route }) {
     const orderId = "WRG-" + new Date().getTime();
 
     try {
-      // Gunakan 10.0.2.2 jika di Android Emulator
       const response = await fetch('http://10.0.2.2:8080/api/get-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
