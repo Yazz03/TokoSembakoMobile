@@ -1,3 +1,4 @@
+import ChatbotModal from './ChatbotModel'; // Pastikan nama file Chatbot-nya benar
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import {
@@ -9,7 +10,8 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
+  TextInput
 } from 'react-native';
 import { supabase } from '../../Services/supabase';
 
@@ -18,14 +20,34 @@ const { width } = Dimensions.get('window');
 export default function HomeScreen({ navigation }) {
   const [products, setProducts] = useState([]);
   const [activeBanner, setActiveBanner] = useState(0);
+  const [namaUser, setNamaUser] = useState('User'); // 👈 Typo huruf 'a' sudah dibersihkan
+  
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // 👇 TAMBAHAN CHATBOT: State untuk mengontrol buka/tutup chat 👇
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   useEffect(() => {
     fetchProducts();
+    fetchUserData(); 
   }, []);
 
   const fetchProducts = async () => {
     const { data } = await supabase.from('products').select('*');
     if (data) setProducts(data);
+  };
+
+  const fetchUserData = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (user) {
+      if (user.user_metadata && user.user_metadata.username) {
+        setNamaUser(user.user_metadata.username);
+      } else if (user.email) {
+        const namaDariEmail = user.email.split('@')[0];
+        setNamaUser(namaDariEmail);
+      }
+    }
   };
 
   const dummyProducts = [
@@ -36,6 +58,10 @@ export default function HomeScreen({ navigation }) {
   ];
 
   const displayData = products.length > 0 ? products : dummyProducts;
+
+  const filteredProducts = searchQuery.trim() !== '' 
+    ? displayData.filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : displayData;
 
   const categories = [
     { id: '1', label: 'Ambil Di tempat', image: { uri: 'https://placehold.co/400x400/FF9800/FFF?text=Ambil+Di+Tempat' } },
@@ -48,153 +74,136 @@ export default function HomeScreen({ navigation }) {
     { id: '3', title: 'Terpercaya', desc: 'Ribuan ulasan bintang 5', bg: '#F3E5F5', image: { uri: 'https://placehold.co/400x400/9C27B0/FFF?text=Promo+3' } },
   ];
 
-  // ─── HEADER ──────────────────────────────────────────────────────────────────
-  const renderHeader = () => (
-    <View>
-      {/* ── Top Bar ── */}
-      <View style={styles.topBar}>
-        <View style={styles.topSearchBar}>
-          <Ionicons name="storefront-outline" size={18} color="#7EB0C9" style={{ marginRight: 8 }} />
-          <Text style={styles.topSearchText}>Belanja sekarang</Text>
+  const renderHeader = () => {
+    if (searchQuery.trim() !== '') {
+      return (
+        <View style={[styles.sectionHeader, { marginTop: 20 }]}>
+          <Text style={styles.sectionTitle}>Hasil Pencarian "{searchQuery}"</Text>
         </View>
-        <TouchableOpacity
-          style={styles.avatarWrapper}
-          onPress={() => navigation.replace('Login')}
-        >
-          <View style={styles.avatar}>
-            <Ionicons name="person" size={20} color="#fff" />
+      );
+    }
+
+    return (
+      <View>
+        <View style={styles.bannerCard}>
+          <View style={styles.bannerLeft}>
+            <Text style={styles.bannerTitle}>Nikmati Diskon{'\n'}Hingga</Text>
+            <Text style={styles.bannerSub}>Pesan Jasa Kami Sekarang</Text>
           </View>
-          <View style={styles.notifDot} />
-        </TouchableOpacity>
-      </View>
-
-      {/* ── Banner Promo ── */}
-      <View style={styles.bannerCard}>
-        <View style={styles.bannerLeft}>
-          <Text style={styles.bannerTitle}>Nikmati Diskon{'\n'}Hingga</Text>
-          <Text style={styles.bannerSub}>Pesan Jasa Kami Sekarang</Text>
+          <Image
+            source={{ uri: 'https://placehold.co/400x400/002244/FFF?text=Banner' }}
+            style={styles.bannerImage}
+            resizeMode="contain"
+          />
         </View>
-        <Image
-          source={{ uri: 'https://placehold.co/400x400/002244/FFF?text=Banner' }}
-          style={styles.bannerImage}
-          resizeMode="contain"
-        />
-      </View>
 
-      {/* Dots indicator */}
-      <View style={styles.dotsRow}>
-        {[0, 1].map((i) => (
-          <View key={i} style={[styles.dot, activeBanner === i && styles.dotActive]} />
-        ))}
-      </View>
+        <View style={styles.dotsRow}>
+          {[0, 1].map((i) => (
+            <View key={i} style={[styles.dot, activeBanner === i && styles.dotActive]} />
+          ))}
+        </View>
 
-      {/* ── Welcome Card ── */}
-      <View style={styles.welcomeCard}>
-        <Ionicons name="happy-outline" size={18} color="#7EB0C9" style={{ marginRight: 8 }} />
-        <Text style={styles.welcomeText}>Sealamat Datang, User!</Text>
-      </View>
+        <View style={styles.welcomeCard}>
+          <Ionicons name="happy-outline" size={18} color="#7EB0C9" style={{ marginRight: 8 }} />
+          <Text style={styles.welcomeText}>Selamat Datang, {namaUser}!</Text>
+        </View>
 
-      {/* ── Kategori Jasa ── */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Kategori Jasa</Text>
-        <TouchableOpacity>
-          <Text style={styles.seeAll}>Lihat Selengkapnya</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.categoryRow}>
-        {categories.map((cat) => (
-          <TouchableOpacity 
-            key={cat.id} 
-            style={styles.categoryCard}
-            onPress={() => navigation.navigate('Order', { mode: cat.label })}
-          >
-            <Image
-              source={cat.image}
-              style={styles.categoryImageBox}
-              resizeMode="cover"
-            />
-            <Text style={styles.categoryLabel}>{cat.label}</Text>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Kategori Jasa</Text>
+          <TouchableOpacity>
+            <Text style={styles.seeAll}>Lihat Selengkapnya</Text>
           </TouchableOpacity>
-        ))}
-      </View>
+        </View>
 
-      {/* ── Cek yang menarik ── */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Cek yang menarik dari kami</Text>
-      </View>
+        <View style={styles.categoryRow}>
+          {categories.map((cat) => (
+            <TouchableOpacity 
+              key={cat.id} 
+              style={styles.categoryCard}
+              onPress={() => navigation.navigate('Order', { mode: cat.label })}
+            >
+              <Image
+                source={cat.image}
+                style={styles.categoryImageBox}
+                resizeMode="cover"
+              />
+              <Text style={styles.categoryLabel}>{cat.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.promoScroll}
-      >
-        {promoItems.map((item) => (
-          <View key={item.id} style={[styles.promoCard, { backgroundColor: item.bg }]}>
-            <Image
-              source={item.image}
-              style={styles.promoImageBox}
-              resizeMode="cover"
-            />
-            <View style={styles.promoInfo}>
-              <Text style={styles.promoTitle}>{item.title}</Text>
-              <Text style={styles.promoDesc}>{item.desc}</Text>
-              <TouchableOpacity>
-                <Text style={styles.promoLink}>Cek selengkapnya</Text>
-              </TouchableOpacity>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Cek yang menarik dari kami</Text>
+        </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.promoScroll}
+        >
+          {promoItems.map((item) => (
+            <View key={item.id} style={[styles.promoCard, { backgroundColor: item.bg }]}>
+              <Image
+                source={item.image}
+                style={styles.promoImageBox}
+                resizeMode="cover"
+              />
+              <View style={styles.promoInfo}>
+                <Text style={styles.promoTitle}>{item.title}</Text>
+                <Text style={styles.promoDesc}>{item.desc}</Text>
+                <TouchableOpacity>
+                  <Text style={styles.promoLink}>Cek selengkapnya</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Jangan lupakan kesempatanmu</Text>
+        </View>
+        <Text style={styles.sectionDesc}>
+          Gunakan voucher untuk mendapatkan{'\n'}biaya gratis dalam pengiriman
+        </Text>
+
+        <View style={styles.voucherCard}>
+          <View style={styles.voucherLeft}>
+            <Text style={styles.voucherTitle}>Diskon gratis ongkir{'\n'}dengan{'\n'}min belanja</Text>
+            <View style={styles.voucherPriceRow}>
+              <Text style={styles.voucherRp}>Rp</Text>
+              <Text style={styles.voucherAmount}>25.000</Text>
             </View>
           </View>
-        ))}
-      </ScrollView>
-
-      {/* ── Jangan Lupakan Kesempatanmu ── */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Jangan lupakan kesempatanmu</Text>
-      </View>
-      <Text style={styles.sectionDesc}>
-        Gunakan voucher untuk mendapatkan{'\n'}biaya gratis dalam pengiriman
-      </Text>
-
-      <View style={styles.voucherCard}>
-        <View style={styles.voucherLeft}>
-          <Text style={styles.voucherTitle}>Diskon gratis ongkir{'\n'}dengan{'\n'}min belanja</Text>
-          <View style={styles.voucherPriceRow}>
-            <Text style={styles.voucherRp}>Rp</Text>
-            <Text style={styles.voucherAmount}>25.000</Text>
+          <View style={styles.voucherRight}>
+            <View style={styles.voucherImageBox}>
+              <Ionicons name="pricetag" size={50} color="#fff" />
+            </View>
+            <View style={styles.timerBadge}>
+              <Ionicons name="time-outline" size={12} color="#fff" />
+              <Text style={styles.timerText}>Sisa waktu 20:23:04</Text>
+            </View>
           </View>
         </View>
-        <View style={styles.voucherRight}>
-          <View style={styles.voucherImageBox}>
-            <Ionicons name="pricetag" size={50} color="#fff" />
+
+        <View style={styles.gopehCard}>
+          <View style={styles.gopehImageBox}>
+            <Ionicons name="cart" size={50} color="#fff" />
           </View>
-          <View style={styles.timerBadge}>
-            <Ionicons name="time-outline" size={12} color="#fff" />
-            <Text style={styles.timerText}>Sisa waktu 20:23:04</Text>
+          <View style={styles.gopehInfo}>
+            <Text style={styles.gopehTitle}>Beli dengan GoPeh{'\n'}dapatkan diskon</Text>
           </View>
         </View>
-      </View>
 
-      {/* ── Beli dengan GoPeh ── */}
-      <View style={styles.gopehCard}>
-        <View style={styles.gopehImageBox}>
-          <Ionicons name="cart" size={50} color="#fff" />
-        </View>
-        <View style={styles.gopehInfo}>
-          <Text style={styles.gopehTitle}>Beli dengan GoPeh{'\n'}dapatkan diskon</Text>
+        <View style={[styles.sectionHeader, { marginTop: 10 }]}>
+          <Text style={styles.sectionTitle}>Produk Pilihan</Text>
+          <TouchableOpacity>
+            <Text style={styles.seeAll}>Lihat Semua</Text>
+          </TouchableOpacity>
         </View>
       </View>
+    );
+  };
 
-      {/* ── Produk Section Title ── */}
-      <View style={[styles.sectionHeader, { marginTop: 10 }]}>
-        <Text style={styles.sectionTitle}>Produk Pilihan</Text>
-        <TouchableOpacity>
-          <Text style={styles.seeAll}>Lihat Semua</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  // ─── PRODUCT CARD ─────────────────────────────────────────────────────────────
   const renderProduct = ({ item }) => (
     <View style={styles.card}>
       {item.image_url ? (
@@ -208,9 +217,12 @@ export default function HomeScreen({ navigation }) {
         <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
         <Text style={styles.productPrice}>Rp {item.price}</Text>
       </View>
+      
       <TouchableOpacity
         style={styles.addButton}
-        onPress={() => alert(`${item.name} akan masuk fitur keranjang nanti!`)}
+        onPress={() => {
+          navigation.navigate('Order', { mode: 'Pesan dan antar' });
+        }}
       >
         <Ionicons name="add" size={20} color="#fff" />
       </TouchableOpacity>
@@ -219,15 +231,44 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
+      
+      <View style={styles.topBar}>
+        <View style={styles.topSearchBar}>
+          <Ionicons name="search" size={18} color="#7EB0C9" style={{ marginRight: 8 }} />
+          <TextInput 
+            style={styles.searchInput}
+            placeholder="Cari sembako..."
+            placeholderTextColor="#888"
+            value={searchQuery}
+            onChangeText={setSearchQuery} 
+          />
+        </View>
+        <TouchableOpacity
+          style={styles.avatarWrapper}
+          onPress={() => navigation.replace('Login')}
+        >
+          <View style={styles.avatar}>
+            <Ionicons name="person" size={20} color="#fff" />
+          </View>
+          <View style={styles.notifDot} />
+        </TouchableOpacity>
+      </View>
+
       <FlatList
         ListHeaderComponent={renderHeader}
-        data={displayData}
+        data={filteredProducts} 
         renderItem={renderProduct}
         keyExtractor={(item) => item.id.toString()}
         numColumns={2}
         contentContainerStyle={styles.listContainer}
         columnWrapperStyle={styles.columnWrapper}
         showsVerticalScrollIndicator={false}
+        ListEmptyComponent={ 
+          <View style={{ alignItems: 'center', marginTop: 50 }}>
+            <Ionicons name="sad-outline" size={50} color="#ccc" />
+            <Text style={{ color: '#888', marginTop: 10 }}>Produk tidak ditemukan.</Text>
+          </View>
+        }
       />
 
       {/* ── Bottom Navigation ── */}
@@ -237,7 +278,6 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.activeIndicator} />
         </TouchableOpacity>
         
-        {/* Navigasi ke Halaman Cart */}
         <TouchableOpacity 
           style={styles.tabItem} 
           onPress={() => navigation.navigate('Cart')}
@@ -245,12 +285,10 @@ export default function HomeScreen({ navigation }) {
           <Ionicons name="cart-outline" size={24} color="#888" />
         </TouchableOpacity>
 
-        {/* Center FAB */}
         <TouchableOpacity style={styles.fabButton}>
           <Ionicons name="apps" size={28} color="#fff" />
         </TouchableOpacity>
 
-        {/* 👇 INI YANG SAYA PERBARUI: Navigasi ke Halaman Riwayat 👇 */}
         <TouchableOpacity 
           style={styles.tabItem}
           onPress={() => navigation.navigate('HistoryScreen')}
@@ -262,6 +300,25 @@ export default function HomeScreen({ navigation }) {
           <Ionicons name="ellipsis-horizontal" size={24} color="#888" />
         </TouchableOpacity>
       </View>
+
+      {/* 👇 TAMBAHAN CHATBOT: Tombol Melayang AI 👇 */}
+      <TouchableOpacity 
+        style={styles.aiFloatingButton} 
+        onPress={() => setIsChatOpen(true)}
+      >
+        <Ionicons name="chatbubbles" size={28} color="#fff" />
+        <View style={styles.aiBadge}>
+          <Text style={{fontSize: 9, color: '#fff', fontWeight: 'bold'}}>AI</Text>
+        </View>
+      </TouchableOpacity>
+
+      {/* 👇 TAMBAHAN CHATBOT: Memanggil Komponen Modal 👇 */}
+      <ChatbotModal 
+        visible={isChatOpen} 
+        onClose={() => setIsChatOpen(false)} 
+        products={displayData} 
+      />
+
     </SafeAreaView>
   );
 }
@@ -270,7 +327,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F6FA' },
   listContainer: { paddingBottom: 80 },
 
-  // ─── Top Bar ───────────────────────────────────────────────
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -278,6 +334,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: '#fff',
+    elevation: 2, 
   },
   topSearchBar: {
     flex: 1,
@@ -286,10 +343,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F4F8',
     borderRadius: 25,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    height: 40,
     marginRight: 12,
   },
-  topSearchText: { color: '#888', fontSize: 14 },
+  searchInput: { flex: 1, fontSize: 14, color: '#333' },
+  
   avatarWrapper: { position: 'relative' },
   avatar: {
     width: 40,
@@ -311,7 +369,6 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
   },
 
-  // ─── Banner ────────────────────────────────────────────────
   bannerCard: {
     backgroundColor: '#C8DFF0',
     marginHorizontal: 16,
@@ -336,7 +393,6 @@ const styles = StyleSheet.create({
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#C8DFF0', marginHorizontal: 3 },
   dotActive: { backgroundColor: '#4A9CC8', width: 18 },
 
-  // ─── Welcome Card ──────────────────────────────────────────
   welcomeCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -352,9 +408,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 3,
   },
-  welcomeText: { fontSize: 14, color: '#444' },
+  welcomeText: { fontSize: 14, color: '#444', fontWeight: 'bold' },
 
-  // ─── Section Header ────────────────────────────────────────
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -367,7 +422,6 @@ const styles = StyleSheet.create({
   seeAll: { fontSize: 13, color: '#4A9CC8', fontWeight: '600' },
   sectionDesc: { fontSize: 13, color: '#888', marginHorizontal: 16, marginTop: -6, marginBottom: 12, lineHeight: 20 },
 
-  // ─── Kategori ──────────────────────────────────────────────
   categoryRow: {
     flexDirection: 'row',
     marginHorizontal: 16,
@@ -398,7 +452,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
 
-  // ─── Promo Horizontal Scroll ───────────────────────────────
   promoScroll: { paddingHorizontal: 16, gap: 12, paddingBottom: 4 },
   promoCard: {
     width: width * 0.65,
@@ -422,7 +475,6 @@ const styles = StyleSheet.create({
   promoDesc: { fontSize: 12, color: '#666', marginBottom: 8 },
   promoLink: { fontSize: 12, color: '#E53935', fontWeight: '600' },
 
-  // ─── Voucher Card ──────────────────────────────────────────
   voucherCard: {
     marginHorizontal: 16,
     borderRadius: 16,
@@ -459,7 +511,6 @@ const styles = StyleSheet.create({
   },
   timerText: { fontSize: 10, color: '#fff', fontWeight: '600' },
 
-  // ─── GoPeh Card ────────────────────────────────────────────
   gopehCard: {
     marginHorizontal: 16,
     marginTop: 12,
@@ -479,7 +530,6 @@ const styles = StyleSheet.create({
   gopehInfo: { flex: 1, justifyContent: 'center', padding: 16 },
   gopehTitle: { fontSize: 15, fontWeight: '700', color: '#fff', lineHeight: 22 },
 
-  // ─── Product Grid ──────────────────────────────────────────
   columnWrapper: { justifyContent: 'space-between', paddingHorizontal: 16 },
   card: {
     backgroundColor: '#fff',
@@ -515,7 +565,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  // ─── Bottom Tab ────────────────────────────────────────────
   bottomTab: {
     flexDirection: 'row',
     height: 64,
@@ -551,5 +600,34 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 8,
+  },
+  
+  // 👇 TAMBAHAN CHATBOT: Style untuk tombol AI 👇
+  aiFloatingButton: {
+    position: 'absolute',
+    bottom: 85, // Berada persis di atas bottom tab
+    right: 20,
+    backgroundColor: '#002244',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+  },
+  aiBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: '#E74C3C',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#F5F6FA'
   },
 });

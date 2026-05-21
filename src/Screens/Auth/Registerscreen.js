@@ -8,32 +8,23 @@ export default function RegisterScreen({ navigation }) {
   const [username, setUsername] = useState('');
 
   const handleRegister = async () => {
-    // 1. Register di Supabase Auth
+    // 1. Cukup Register di Supabase Auth (Username otomatis tersimpan di metadata)
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: {
+          username: username,
+        }
+      }
     });
 
+    // 2. Langsung tampilkan hasil sukses/gagal
     if (error) {
       Alert.alert('Error', error.message);
     } else {
-      // 2. Simpan data ke tabel public.users
-      const { error: insertError } = await supabase
-        .from('users')
-        .insert([
-          {
-            id: data.user.id, // Menggunakan ID dari Auth
-            email: email,
-            name: username,
-          }
-        ]);
-
-      if (insertError) {
-        Alert.alert('Database Error', insertError.message);
-      } else {
-        Alert.alert('Sukses', 'Registrasi berhasil, silakan login.');
-        navigation.navigate('Login');
-      }
+      Alert.alert('Sukses', 'Registrasi berhasil, silakan login.');
+      navigation.navigate('Login');
     }
   };
 
@@ -84,7 +75,6 @@ export default function RegisterScreen({ navigation }) {
   );
 }
 
-// Gunakan StyleSheet yang sama dengan LoginScreen untuk konsistensi desain
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff', alignItems: 'center', paddingTop: 80 },
   title: { fontSize: 32, fontWeight: 'bold', color: '#002244', marginBottom: 30 },

@@ -224,7 +224,9 @@ export default function OrderScreen({ navigation, route }) {
             onPress={() => navigation.navigate('Checkout', { 
               cart: cart, 
               products: products,
-              resetCart: clearCartState // Kirim fungsi reset ke Checkout
+              resetCart: clearCartState,
+              // 👇 INI YANG DITAMBAHKAN AGAR CHECKOUT TAHU PILIHAN AWAL USER 👇
+              mode: mode 
             })}
           >
             <Text style={styles.checkoutText}>Checkout</Text>

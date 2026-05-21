@@ -66,11 +66,8 @@ export default function HistoryScreen({ navigation }) {
       </View>
       
       {/* Tombol Rincian (Disiapkan untuk fitur selanjutnya) */}
-      <TouchableOpacity 
-        style={styles.detailBtn}
-        onPress={() => alert('Fitur rincian produk akan datang di update selanjutnya!')}
-      >
-        <Text style={styles.detailBtnText}>Lihat Rincian</Text>
+      <TouchableOpacity onPress={() => navigation.navigate('OrderDetails', { order: item })}>
+      <Text>Lihat Rincian</Text>
       </TouchableOpacity>
     </View>
   );
